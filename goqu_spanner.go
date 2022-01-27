@@ -10,6 +10,9 @@ const DialectName = "spanner"
 // DialectOptions returns the SQL options to implement a goqu dialect.
 func DialectOptions() *goqu.SQLDialectOptions {
 	options := goqu.DefaultDialectOptions()
+
+	options.SupportsReturn = false
+	options.SupportsDistinctOn = false
 	options.QuoteRune = '`'
 
 	return options

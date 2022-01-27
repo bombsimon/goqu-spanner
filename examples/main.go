@@ -29,7 +29,6 @@ import (
 
 	// Load our custom dialect.
 	"github.com/bombsimon/goquspanner"
-
 	_ "github.com/googleapis/go-sql-spanner"
 )
 
@@ -56,6 +55,12 @@ type Role struct {
 type UserRoles struct {
 	UserID int64
 	RoleID int64
+}
+
+type UserRole struct {
+	Name     string         `db:"UserName"`
+	Email    sql.NullString `db:"Email"`
+	RoleName string         `db:"RoleName"`
 }
 
 func main() {
@@ -221,12 +226,6 @@ func joinSelect(db *goqu.Database) {
 	sqlStr, _, _ := ds.ToSQL()
 	log.Println("Selecting with join:")
 	log.Println("  ", sqlStr)
-
-	type UserRole struct {
-		Name     string         `db:"UserName"`
-		Email    sql.NullString `db:"Email"`
-		RoleName string         `db:"RoleName"`
-	}
 
 	var userRoles []UserRole
 	if err := ds.
