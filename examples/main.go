@@ -42,10 +42,26 @@ const (
 	emulatorDBPath       = emulatorInstancePath + "/databases/" + emulatorDBName
 )
 
+type User struct {
+	UserID int64
+	Name   string
+	Email  sql.NullString
+}
+
+type Role struct {
+	RoleID int64
+	Name   string
+}
+
+type UserRoles struct {
+	UserID int64
+	RoleID int64
+}
+
 func main() {
 	createInstanceAndDatabase()
 
-	spannerDB, err := sql.Open("spanner", emulatorDBPath)
+	spannerDB, err := sql.Open(goquspanner.DialectName, emulatorDBPath)
 	if err != nil {
 		panic(err)
 	}
@@ -54,6 +70,7 @@ func main() {
 	db := dialect.DB(spannerDB)
 
 	insert(db)
+	selects(db)
 }
 
 func insert(db *goqu.Database) {
@@ -64,6 +81,8 @@ func insert(db *goqu.Database) {
 }
 
 func insertRows(db *goqu.Database) {
+	log.Println("Inserting with goqu.Record")
+
 	ds := db.Insert("Users").Rows([]goqu.Record{
 		{"UserID": 1, "Name": "Jane", "Email": nil},
 		{"UserID": 2, "Name": "John", "Email": "john@doe.com"},
@@ -76,6 +95,8 @@ func insertRows(db *goqu.Database) {
 }
 
 func insertColsVals(db *goqu.Database) {
+	log.Println("Inserting with goqu.Cols and goqu.Vals")
+
 	ds := db.Insert("Users").
 		Cols("UserID", "Name", "Email").
 		Vals(
@@ -89,11 +110,7 @@ func insertColsVals(db *goqu.Database) {
 }
 
 func insertStruct(db *goqu.Database) {
-	type User struct {
-		UserID int64
-		Name   string
-		Email  sql.NullString
-	}
+	log.Println("Inserting with struct")
 
 	users := []User{
 		{
@@ -114,6 +131,8 @@ func insertStruct(db *goqu.Database) {
 }
 
 func insertRoles(db *goqu.Database) {
+	log.Println("Inserting roles")
+
 	ds := db.Insert("Roles").Rows([]goqu.Record{
 		{"RoleId": 1, "Name": "User"},
 		{"RoleId": 2, "Name": "Supporter"},
@@ -125,6 +144,8 @@ func insertRoles(db *goqu.Database) {
 	if _, err := ds.Exec(); err != nil {
 		panic(err)
 	}
+
+	log.Println("Mapping roles to users")
 
 	ds = db.Insert("UserRoles").Rows([]goqu.Record{
 		{"UserID": 1, "RoleID": 1},
@@ -141,6 +162,84 @@ func insertRoles(db *goqu.Database) {
 	if _, err := ds.Exec(); err != nil {
 		panic(err)
 	}
+}
+
+func selects(db *goqu.Database) {
+	simpleSelect(db)
+	joinSelect(db)
+}
+
+func simpleSelect(db *goqu.Database) {
+	ds := db.From("Users").
+		Select(goqu.Star()).
+		Where(
+			goqu.I("UserID").Lt(6),
+			goqu.I("Email").IsNotNull(),
+		)
+
+	sqlStr, _, _ := ds.ToSQL()
+	log.Println("Selecting simple:")
+	log.Println("  ", sqlStr)
+
+	var users []User
+	if err := ds.
+		ScanStructs(&users); err != nil {
+		panic(err)
+	}
+
+	log.Printf("%-10s | %-20s | %-s\n", "ID", "NAME", "EMAIL")
+	for _, u := range users {
+		log.Printf("%-10d | %-20s | %-s\n", u.UserID, u.Name, u.Email.String)
+	}
+
+	fmt.Println("")
+}
+
+func joinSelect(db *goqu.Database) {
+	ds := db.From(goqu.T("Users").As("u")).
+		Join(
+			goqu.T("UserRoles").As("ur"),
+			goqu.On(goqu.Ex{
+				"u.UserID": goqu.I("ur.UserID"),
+			}),
+		).
+		Join(
+			goqu.T("Roles").As("r"),
+			goqu.On(goqu.Ex{
+				"ur.RoleID": goqu.I("r.RoleID"),
+			}),
+		).
+		Select(
+			goqu.I("u.Name").As("UserName"),
+			goqu.I("u.Email"),
+			goqu.I("r.Name").As("RoleName"),
+		).
+		Where(
+			goqu.I("u.Email").IsNotNull(),
+		)
+
+	sqlStr, _, _ := ds.ToSQL()
+	log.Println("Selecting with join:")
+	log.Println("  ", sqlStr)
+
+	type UserRole struct {
+		Name     string         `db:"UserName"`
+		Email    sql.NullString `db:"Email"`
+		RoleName string         `db:"RoleName"`
+	}
+
+	var userRoles []UserRole
+	if err := ds.
+		ScanStructs(&userRoles); err != nil {
+		panic(err)
+	}
+
+	log.Printf("%-20s | %-20s | %-s\n", "NAME", "EMAIL", "ROLE")
+	for _, u := range userRoles {
+		log.Printf("%-20s | %-20s | %-s\n", u.Name, u.Email.String, u.RoleName)
+	}
+
+	fmt.Println("")
 }
 
 func createInstanceAndDatabase() {
