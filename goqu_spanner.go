@@ -11,8 +11,14 @@ const DialectName = "spanner"
 func DialectOptions() *goqu.SQLDialectOptions {
 	options := goqu.DefaultDialectOptions()
 
-	options.SupportsReturn = false
+	options.SupportsConflictTarget = false
+	options.SupportsConflictUpdateWhere = false
 	options.SupportsDistinctOn = false
+	options.SupportsDistinctOn = false
+	options.SupportsMultipleUpdateTables = false
+	options.SupportsReturn = false
+	options.SupportsWindowFunction = false
+
 	options.QuoteRune = '`'
 
 	return options

@@ -41,10 +41,14 @@ const (
 	emulatorDBPath       = emulatorInstancePath + "/databases/" + emulatorDBName
 )
 
+//nolint:gochecknoglobals // Just for example.
+var commitTimestamp = goqu.L("PENDING_COMMIT_TIMESTAMP()")
+
 type User struct {
-	UserID int64
-	Name   string
-	Email  sql.NullString
+	UserID    int64
+	Name      string
+	Email     sql.NullString
+	CreatedAt sql.NullTime
 }
 
 type Role struct {
@@ -89,8 +93,8 @@ func insertRows(db *goqu.Database) {
 	log.Println("Inserting with goqu.Record")
 
 	ds := db.Insert("Users").Rows([]goqu.Record{
-		{"UserID": 1, "Name": "Jane", "Email": nil},
-		{"UserID": 2, "Name": "John", "Email": "john@doe.com"},
+		{"UserID": 1, "Name": "Jane", "Email": nil, "CreatedAt": commitTimestamp},
+		{"UserID": 2, "Name": "John", "Email": "john@doe.com", "CreatedAt": commitTimestamp},
 	},
 	).Executor()
 
@@ -103,10 +107,10 @@ func insertColsVals(db *goqu.Database) {
 	log.Println("Inserting with goqu.Cols and goqu.Vals")
 
 	ds := db.Insert("Users").
-		Cols("UserID", "Name", "Email").
+		Cols("UserID", "Name", "Email", "CreatedAt").
 		Vals(
-			goqu.Vals{3, "Anna", nil},
-			goqu.Vals{4, "Adam", "adam@eden.com"},
+			goqu.Vals{3, "Anna", nil, commitTimestamp},
+			goqu.Vals{4, "Adam", "adam@eden.com", commitTimestamp},
 		).Executor()
 
 	if _, err := ds.Exec(); err != nil {
@@ -178,9 +182,10 @@ func simpleSelect(db *goqu.Database) {
 	ds := db.From("Users").
 		Select(goqu.Star()).
 		Where(
-			goqu.I("UserID").Lt(6),
+			goqu.I("UserID").Between(goqu.Range(2, 6)),
 			goqu.I("Email").IsNotNull(),
-		)
+		).
+		Order(goqu.I("UserID").Asc())
 
 	sqlStr, _, _ := ds.ToSQL()
 	log.Println("Selecting simple:")
@@ -192,9 +197,14 @@ func simpleSelect(db *goqu.Database) {
 		panic(err)
 	}
 
-	log.Printf("%-10s | %-20s | %-s\n", "ID", "NAME", "EMAIL")
+	log.Printf("%-10s | %-40s | %-20s | %-s\n", "ID", "CREATED AT", "NAME", "EMAIL")
 	for _, u := range users {
-		log.Printf("%-10d | %-20s | %-s\n", u.UserID, u.Name, u.Email.String)
+		c, _ := u.CreatedAt.Value()
+		if !u.CreatedAt.Valid {
+			c = "NULL"
+		}
+
+		log.Printf("%-10d | %-40s | %-20s | %-s\n", u.UserID, c, u.Name, u.Email.String)
 	}
 
 	fmt.Println("")
@@ -289,9 +299,10 @@ func createInstanceAndDatabase() {
 		CreateStatement: fmt.Sprintf("CREATE DATABASE %s", emulatorDBName),
 		ExtraStatements: []string{
 			`CREATE TABLE Users (
-				UserID INT64 NOT NULL,
-				Name   STRING(128) NOT NULL,
-				Email  STRING(128),
+				UserID    INT64 NOT NULL,
+				Name      STRING(128) NOT NULL,
+				Email     STRING(128),
+				CreatedAt TIMESTAMP OPTIONS (allow_commit_timestamp=true)
 			) PRIMARY KEY(UserID)`,
 			`CREATE UNIQUE INDEX UsersName ON Users(Name)`,
 			`CREATE TABLE Roles (

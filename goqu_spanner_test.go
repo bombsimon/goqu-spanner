@@ -70,6 +70,25 @@ func TestSelect(t *testing.T) {
 				).Distinct(),
 			expectedSQL: "SELECT DISTINCT COALESCE(`a`, 'empty') FROM `table`",
 		},
+		{
+			description: "select in (not unnest)",
+			dataset: dw.From("table").
+				Where(goqu.C("col").In([]string{"a", "b", "c"})),
+			expectedSQL: "SELECT * FROM `table` WHERE (`col` IN ('a', 'b', 'c'))",
+		},
+		{
+			description: "select literal and identifier",
+			dataset: dw.From("table").
+				Where(
+					goqu.L(
+						"(? AND ?) OR (?)",
+						goqu.I("a").Eq(1),
+						goqu.I("b").Eq("b"),
+						goqu.I("c").In([]string{"a", "b", "c"}),
+					),
+				),
+			expectedSQL: "SELECT * FROM `table` WHERE ((`a` = 1) AND (`b` = 'b')) OR ((`c` IN ('a', 'b', 'c')))",
+		},
 	}
 
 	for _, tc := range cases {
