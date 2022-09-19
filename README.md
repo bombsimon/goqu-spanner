@@ -4,8 +4,6 @@ This is a [`goqu`][goqu] implementation for [Spanner].
 
 **THIS IS A WORK-IN-PROGRESS, DON'T USE IT IN PRODUCTION YET.**.
 
-This is also true for the [go-sql-spanner] implementation
-
 ## Usage
 
 Use like any other goqu driver, see [`examples`][examples] for details.
